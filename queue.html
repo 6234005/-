@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>现场取号</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: '苹方-简', sans-serif; }
+        body { background: #f8f9fa; min-height: 100vh; display: flex; flex-direction: column; padding: 20px; }
+        .container { max-width: 600px; margin: 0 auto; background: white; padding: 24px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        .title { font-size: 20px; font-weight: 600; color: #212529; margin-bottom: 20px; text-align: center; }
+        .form-group { margin-bottom: 16px; }
+        label { display: block; font-size: 14px; color: #495057; margin-bottom: 8px; }
+        input { width: 100%; padding: 10px; border: 1px solid #ced4da; border-radius: 6px; font-size: 14px; }
+        button { width: 100%; padding: 12px; background: #28a745; color: white; border: none; border-radius: 6px; font-size: 16px; font-weight: 600; cursor: pointer; transition: background 0.3s; }
+        button:hover { background: #218838; }
+        .status { margin-top: 24px; padding: 16px; background: #f8f9fa; border-radius: 6px; }
+        .queue-number { font-size: 36px; font-weight: 900; color: #28a745; margin-bottom: 8px; }
+        .waiting-count { font-size: 18px; color: #6c757d; }
+        .call-btn { background: #dc3545; margin-top: 20px; }
+        .call-btn:hover { background: #c82333; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="title">扫码取号（现场版）</h1>
+        
+        <form id="takeForm">
+            <div class="form-group">
+                <label>联系电话</label>
+                <input type="tel" id="phone" required pattern="[0-9]{11}" placeholder="请输入11位手机号">
+            </div>
+            <div class="form-group">
+                <label>姓名</label>
+                <input type="text" id="name" required placeholder="请输入姓名">
+            </div>
+            <button type="submit">取 号</button>
+        </form>
+
+        <div id="userStatus" class="status hidden">
+            <div class="queue-number">您的号码：<span id="currentNum">A001</span></div>
+            <div class="waiting-count">前面还有 <span id="waitingNum">0</span> 人</div>
+        </div>
+
+        <!-- 工作人员操作区（可折叠） -->
+        <div id="staffPanel" class="status mt-4">
+            <h3 class="mb-2">当前队列（工作人员专用）</h3>
+            <div id="queueList"></div>
+            <button class="call-btn" onclick="callNext()">叫 下 一 位</button>
+        </div>
+    </div>
+
+    <script>
+        // 本地存储键名
+        const QUEUE_KEY = 'queue_records';
+
+        // 初始化队列
+        function initQueue() {
+            let records = JSON.parse(localStorage.getItem(QUEUE_KEY)) || [];
+            // 清理已叫号记录（超过100条自动清理）
+            if (records.length > 100) {
+                records = records.filter(r => !r.called);
+            }
+            localStorage.setItem(QUEUE_KEY, JSON.stringify(records));
+            updateQueueDisplay();
+        }
+
+        // 取号逻辑
+        document.getElementById('takeForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const phone = document.getElementById('phone').value;
+            const name = document.getElementById('name').value;
+            let records = JSON.parse(localStorage.getItem(QUEUE_KEY)) || [];
+
+            // 检查重复取号
+            if (records.some(r => r.phone === phone && !r.called)) {
+                alert('您已取过号，请等待叫号！');
+                return;
+            }
+
+            // 生成新号码
+            const newNumber = `A${(records.length + 1).toString().padStart(3, '0')}`;
+            records.push({ 
+                number: newNumber, 
+                phone, 
+                name, 
+                called: false, 
+                time: new Date().toLocaleTimeString() 
+            });
+            localStorage.setItem(QUEUE_KEY, JSON.stringify(records));
+
+            // 计算等待人数
+            const waiting = records.filter(r => !r.called && r.number !== newNumber).length;
+            
+            // 显示用户状态
+            document.getElementById('userStatus').classList.remove('hidden');
+            document.getElementById('currentNum').textContent = newNumber;
+            document.getElementById('waitingNum').textContent = waiting;
+            e.target.reset();
+            updateQueueDisplay();
+        });
+
+        // 叫号逻辑
+        function callNext() {
+            let records = JSON.parse(localStorage.getItem(QUEUE_KEY)) || [];
+            const next = records.find(r => !r.called);
+            if (!next) {
+                alert('当前没有等待的顾客！');
+                return;
+            }
+            next.called = true;
+            localStorage.setItem(QUEUE_KEY, JSON.stringify(records));
+            updateQueueDisplay();
+            alert(`已叫号：${next.number} ${next.name}（${next.phone}）`);
+        }
+
+        // 更新队列显示
+        function updateQueueDisplay() {
+            const list = document.getElementById('queueList');
+            const records = JSON.parse(localStorage.getItem(QUEUE_KEY)) || [];
+            list.innerHTML = records.map((r, i) => `
+                <div class="mb-2 p-2 ${r.called ? 'bg-gray-200' : 'bg-green-100'} rounded">
+                    ${r.called ? '✓ 已叫' : `⏳ 等待 (${i+1})`} 
+                    ${r.number} ${r.name} ${r.phone}
+                    <span class="float-right text-sm text-gray-500">${r.time}</span>
+                </div>
+            `).join('');
+        }
+
+        // 初始化
+        initQueue();
+    </script>
+</body>
+</html>
